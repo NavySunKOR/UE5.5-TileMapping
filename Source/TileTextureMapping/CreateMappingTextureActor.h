@@ -28,10 +28,13 @@ protected:
 	void CIE_CreateTexture();
 
 	UPROPERTY(EditAnywhere)
-	int32 OriginalTileCounts;
+	int32 TileAtlasTextureResolution;
 
 	UPROPERTY(EditAnywhere)
-	int32 MappingTileCounts;
+	int32 PerTileResolution;
+
+	UPROPERTY(EditAnywhere)
+	int32 IndexTextureResolution;
 
 	UPROPERTY(EditAnywhere)
 	FString SaveDir;
