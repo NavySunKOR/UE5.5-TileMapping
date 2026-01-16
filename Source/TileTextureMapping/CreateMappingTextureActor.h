@@ -6,13 +6,15 @@
 #include "GameFramework/Actor.h"
 #include "CreateMappingTextureActor.generated.h"
 
-#define WEST_BIT 8
-#define NORTH_BIT 1
-#define EAST_BIT 2
-#define SOUTH_BIT 4
+#define WEST_BIT 3
+#define NORTH_BIT 0
+#define EAST_BIT 1
+#define SOUTH_BIT 2
 
+USTRUCT(BlueprintType)
 struct FWangTileData
 {
+	GENERATED_BODY()
 public:
 	FWangTileData()
 	{
@@ -29,9 +31,10 @@ public:
 		this->East = East;
 		this->South = South;
 
-		TileIndice = (North) | (East << EAST_BIT) | (South << SOUTH_BIT) | (West << WEST_BIT);
+		uint8 NETile = (North << NORTH_BIT) | (East << EAST_BIT);
+		uint8 SWTile = (South << SOUTH_BIT) | (West << WEST_BIT);
 
-		UE_LOG(LogTemp, Warning, TEXT("TileIndice : %d"), TileIndice);
+		TileIndice = NETile | SWTile;
 	}
 
 	FWangTileData(uint8 Indice)
@@ -42,12 +45,25 @@ public:
 		East = ((Indice & EAST_BIT) > 0) ? 1 : 0;
 		North = ((Indice & NORTH_BIT) > 0)? 1 : 0;
 	}
-	uint8 West;
-	uint8 North;
-	uint8 East;
-	uint8 South;
 
-	uint8 TileIndice;
+	void CalcTileIndice()
+	{
+		uint8 NETile = (North << NORTH_BIT) | (East << EAST_BIT);
+		uint8 SWTile = (South << SOUTH_BIT) | (West << WEST_BIT);
+
+		TileIndice = NETile | SWTile;
+	}
+
+	UPROPERTY(EditAnywhere)
+	int8 West;
+	UPROPERTY(EditAnywhere)
+	int8 North;
+	UPROPERTY(EditAnywhere)
+	int8 East;
+	UPROPERTY(EditAnywhere)
+	int8 South;
+
+	int8 TileIndice;
 };
 
 UCLASS()
@@ -95,5 +111,12 @@ protected:
 	UPROPERTY(EditAnywhere, Category = "RandomTile")
 	FString SaveName;
 #endif
+
+	UPROPERTY(EditAnywhere)
+	bool bUseManualMapping = false;
+
+	UPROPERTY(EditAnywhere, meta = (EditCondition = "bUseManualMapping",EditConditionHides))
 	TArray<FWangTileData> Tiles;
+
+
 };

@@ -106,10 +106,20 @@ void ACreateMappingTextureActor::CIE_CreateRandomTileIndexTexture()
 //Wang tile fixes 16 tile in total.
 void ACreateMappingTextureActor::CIE_CreateWangTileIndexTexture()
 {
-	Tiles.Empty();
-	for (int32 i = 0; i <= 15; ++i)
+	if (bUseManualMapping == false)
 	{
-		Tiles.Add(FWangTileData(i));
+		Tiles.Empty();
+		for (int32 i = 0; i <= 15; ++i)
+		{
+			Tiles.Add(FWangTileData(i));
+		}
+	}
+	else
+	{
+		for (FWangTileData& Tile : Tiles)
+		{
+			Tile.CalcTileIndice();
+		}
 	}
 
 	FString saveLoc = (SaveDir + "/" + SaveName);
@@ -148,11 +158,14 @@ void ACreateMappingTextureActor::CIE_CreateWangTileIndexTexture()
 	for (int32 i = 0; i < IndexTextureResolution * IndexTextureResolution * 4; i += 4)
 	{
 		const uint8 SelectedTiles1D = GetWangTileIndex(ArrayData,i);
-		const uint8 XCount = SelectedTiles1D % TileCountsPerAxis;
-		const uint8 YCount = SelectedTiles1D / TileCountsPerAxis;
+		const uint8 XIdx = SelectedTiles1D % TileCountsPerAxis;
+		const uint8 YIdx = SelectedTiles1D / TileCountsPerAxis;
+		UE_LOG(LogTemp, Warning, TEXT("SelectedTiles1D :%d / XIdx : %d / YIdx : %d"), SelectedTiles1D, XIdx, YIdx)
 
-		const float RateX = XCount / TileCountsPerAxis;
-		const float RateY = YCount / TileCountsPerAxis;
+		const float RateX = (float)XIdx / TileCountsPerAxis;
+		const float RateY = (float)YIdx / TileCountsPerAxis;
+
+		UE_LOG(LogTemp,Warning,TEXT("Rate X : %f / Rate Y : %f"),RateX,RateY)
 
 		const uint8 RChannel = (uint8)(RateX * 255);
 		const uint8 GChannel = (uint8)(RateY * 255);
@@ -211,7 +224,6 @@ uint8 ACreateMappingTextureActor::GetWangTileIndex(uint8* InPixelArray, int32 Cu
 	int32 Y = CurrentPixelIdx / IndexTextureResolution;
 
 	//Corner check
-
 	const bool bIsXCornor = (X == 0 || X == (IndexTextureResolution - 1));
 	const bool bIsYCornor = (Y == 0 || Y == (IndexTextureResolution - 1));
 
@@ -224,14 +236,14 @@ uint8 ACreateMappingTextureActor::GetWangTileIndex(uint8* InPixelArray, int32 Cu
 	{
 		if (bIsXCornor)
 		{
-			West = (X == 0) ? 1 : 0;
-			East = (X == (IndexTextureResolution - 1))? 1 : 0;
+			West = (X == 0) ? 0 : 1;
+			East = (X == (IndexTextureResolution - 1))? 0 : 1;
 		}
 
 		if(bIsYCornor)
 		{
-			North = (Y == 0) ? 1 : 0;
-			South = (Y == (IndexTextureResolution - 1)) ? 1 : 0;
+			North = (Y == 0) ? 0 : 1;
+			South = (Y == (IndexTextureResolution - 1)) ? 0 : 1;
 		}
 	}
 	else //If it's not cornor, then search four neighbour pixels and matches
@@ -248,6 +260,8 @@ uint8 ACreateMappingTextureActor::GetWangTileIndex(uint8* InPixelArray, int32 Cu
 		int32 SouthIdx = (CurrentPixelIdx + (Y * IndexTextureResolution)) ;
 		South = ((InPixelArray[SouthIdx] & SOUTH_BIT) != 0)? 1: 0 ;
 	}
+
+
 
 	FWangTileData SearchTile = FWangTileData(West, North, East, South);
 	return SearchWangTileIndex(SearchTile.TileIndice);
