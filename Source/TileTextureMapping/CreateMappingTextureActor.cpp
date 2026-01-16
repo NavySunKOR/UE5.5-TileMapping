@@ -17,7 +17,7 @@ ACreateMappingTextureActor::ACreateMappingTextureActor()
 void ACreateMappingTextureActor::BeginPlay()
 {
 	Super::BeginPlay();
-	
+
 }
 
 // Called every frame
@@ -26,8 +26,8 @@ void ACreateMappingTextureActor::Tick(float DeltaTime)
 	Super::Tick(DeltaTime);
 }
 
-
-void ACreateMappingTextureActor::CIE_CreateTexture()
+#if WITH_EDITOR
+void ACreateMappingTextureActor::CIE_CreateRandomTileIndexTexture()
 {
 	FString saveLoc = (SaveDir + "/" + SaveName);
 	UPackage* TexturePackage = CreatePackage(*saveLoc);
@@ -100,3 +100,156 @@ void ACreateMappingTextureActor::CIE_CreateTexture()
 	ObjectsToSync.Add(MappingTexture);
 	GEditor->SyncBrowserToObjects(ObjectsToSync);
 }
+#endif
+
+#if WITH_EDITOR
+//Wang tile fixes 16 tile in total.
+void ACreateMappingTextureActor::CIE_CreateWangTileIndexTexture()
+{
+	Tiles.Empty();
+	for (int32 i = 0; i <= 15; ++i)
+	{
+		Tiles.Add(FWangTileData(i));
+	}
+
+	FString saveLoc = (SaveDir + "/" + SaveName);
+	UPackage* TexturePackage = CreatePackage(*saveLoc);
+	TexturePackage->FullyLoad();
+
+	const EPixelFormat PixelFormat = EPixelFormat::PF_B8G8R8A8;
+	const int32 TileCountsPerAxis = (int32)(TileAtlasTextureResolution / PerTileResolution);
+
+	UTexture2D* MappingTexture = NewObject<UTexture2D>(TexturePackage, UTexture2D::StaticClass(), *SaveName, RF_Public | RF_Standalone);
+	MappingTexture->MipGenSettings = TMGS_NoMipmaps;
+	MappingTexture->CompressionSettings = TC_Default;
+	MappingTexture->SRGB = false;
+	MappingTexture->SetPlatformData(new FTexturePlatformData());
+	FTexturePlatformData* Data = MappingTexture->GetPlatformData();
+	Data->SizeX = IndexTextureResolution;
+	Data->SizeY = IndexTextureResolution;
+	Data->SetNumSlices(1);
+	Data->PixelFormat = PixelFormat;
+
+	int32 NumBlocksX = IndexTextureResolution / GPixelFormats[PixelFormat].BlockSizeX;
+	int32 NumBlocksY = IndexTextureResolution / GPixelFormats[PixelFormat].BlockSizeY;
+	FTexture2DMipMap* Mip = new FTexture2DMipMap();
+	Mip->SizeX = IndexTextureResolution;
+	Mip->SizeY = IndexTextureResolution;
+	Mip->BulkData.Lock(LOCK_READ_WRITE);
+	Mip->BulkData.Realloc((int64)NumBlocksX * NumBlocksY * GPixelFormats[PixelFormat].BlockBytes);
+	Mip->BulkData.Unlock();
+
+	MappingTexture->GetPlatformData()->Mips.Add(Mip);
+
+
+	FByteBulkData& BulkData = MappingTexture->GetPlatformData()->Mips[0].BulkData;
+	uint8* ArrayData = static_cast<uint8*>(BulkData.Lock(LOCK_READ_WRITE));
+	const int32 Max = TileCountsPerAxis - 1;
+	for (int32 i = 0; i < IndexTextureResolution * IndexTextureResolution * 4; i += 4)
+	{
+		const uint8 SelectedTiles1D = GetWangTileIndex(ArrayData,i);
+		const uint8 XCount = SelectedTiles1D % TileCountsPerAxis;
+		const uint8 YCount = SelectedTiles1D / TileCountsPerAxis;
+
+		const float RateX = XCount / TileCountsPerAxis;
+		const float RateY = YCount / TileCountsPerAxis;
+
+		const uint8 RChannel = (uint8)(RateX * 255);
+		const uint8 GChannel = (uint8)(RateY * 255);
+		ArrayData[i] = SelectedTiles1D; //B
+		ArrayData[i + 1] = GChannel; //G
+		ArrayData[i + 2] = RChannel; //R
+		ArrayData[i + 3] = 1; //A
+	}
+	MappingTexture->Source.Init(IndexTextureResolution, IndexTextureResolution, 1, 1, ETextureSourceFormat::TSF_BGRA8, ArrayData);
+	BulkData.Unlock();
+	MappingTexture->UpdateResource();
+
+	TexturePackage->MarkPackageDirty();
+	FAssetRegistryModule::AssetCreated(MappingTexture);
+
+
+	FString PackageFilePath = FPackageName::LongPackageNameToFilename(SaveDir, FPackageName::GetAssetPackageExtension());
+
+	if (!UPackage::SavePackage(
+		TexturePackage,
+		MappingTexture,
+		EObjectFlags::RF_Public | EObjectFlags::RF_Standalone,
+		*PackageFilePath
+	))
+	{
+		UE_LOG(LogTemp, Error, TEXT("Failed to save Asset: [%s]\n"), *PackageFilePath);
+	}
+	TArray<UObject*> ObjectsToSync;
+	ObjectsToSync.Add(MappingTexture);
+	GEditor->SyncBrowserToObjects(ObjectsToSync);
+}
+
+uint8 ACreateMappingTextureActor::SearchWangTileIndex(uint8 SearchIdx)
+{
+	TArray<FWangTileData> OutputTile;
+	for (const FWangTileData& Tile : Tiles)
+	{
+		//Place where
+		if (SearchIdx == 0)
+		{
+			OutputTile.Add(Tile);
+		}
+		else if ((Tile.TileIndice & SearchIdx) != 0)
+		{
+			OutputTile.Add(Tile);
+		}
+	}
+
+	const FWangTileData& Result = OutputTile[FMath::RandRange(0, OutputTile.Num() - 1)];
+
+	return Result.TileIndice;
+}
+uint8 ACreateMappingTextureActor::GetWangTileIndex(uint8* InPixelArray, int32 CurrentPixelIdx)
+{
+	int32 X = CurrentPixelIdx % IndexTextureResolution;
+	int32 Y = CurrentPixelIdx / IndexTextureResolution;
+
+	//Corner check
+
+	const bool bIsXCornor = (X == 0 || X == (IndexTextureResolution - 1));
+	const bool bIsYCornor = (Y == 0 || Y == (IndexTextureResolution - 1));
+
+	uint8 West = 0;
+	uint8 North = 0;
+	uint8 East = 0;
+	uint8 South = 0;
+
+	if (bIsXCornor || bIsYCornor)
+	{
+		if (bIsXCornor)
+		{
+			West = (X == 0) ? 1 : 0;
+			East = (X == (IndexTextureResolution - 1))? 1 : 0;
+		}
+
+		if(bIsYCornor)
+		{
+			North = (Y == 0) ? 1 : 0;
+			South = (Y == (IndexTextureResolution - 1)) ? 1 : 0;
+		}
+	}
+	else //If it's not cornor, then search four neighbour pixels and matches
+	{
+		int32 WestIdx = CurrentPixelIdx - 4;
+		West = ((InPixelArray[WestIdx] & WEST_BIT) != 0) ? 1 : 0;
+
+		int32 NorthIdx = (CurrentPixelIdx - (Y * IndexTextureResolution)) ;
+		North = ((InPixelArray[NorthIdx] & NORTH_BIT) != 0) ? 1 : 0;
+
+		int32 EastIdx = CurrentPixelIdx + 4;
+		East = ((InPixelArray[EastIdx] & EAST_BIT) != 0) ? 1 : 0;
+
+		int32 SouthIdx = (CurrentPixelIdx + (Y * IndexTextureResolution)) ;
+		South = ((InPixelArray[SouthIdx] & SOUTH_BIT) != 0)? 1: 0 ;
+	}
+
+	FWangTileData SearchTile = FWangTileData(West, North, East, South);
+	return SearchWangTileIndex(SearchTile.TileIndice);
+}
+#endif
