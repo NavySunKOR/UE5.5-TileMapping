@@ -33,32 +33,9 @@ void ACreateMappingTextureActor::CIE_CreateRandomTileIndexTexture()
 	UPackage* TexturePackage = CreatePackage(*saveLoc);
 	TexturePackage->FullyLoad();
 
-	const EPixelFormat PixelFormat = EPixelFormat::PF_B8G8R8A8;
 	const int32 TileCountsPerAxis = (int32)(TileAtlasTextureResolution / PerTileResolution);
+	UTexture2D* MappingTexture = CreateTexture2D(EPixelFormat::PF_B8G8R8A8, TexturePackage);
 
-	UTexture2D* MappingTexture = NewObject<UTexture2D>(TexturePackage, UTexture2D::StaticClass(),*SaveName, RF_Public | RF_Standalone);
-	MappingTexture->MipGenSettings = TMGS_NoMipmaps;
-	MappingTexture->CompressionSettings = TC_Default;
-	MappingTexture->SRGB = false;  
-	MappingTexture->SetPlatformData(new FTexturePlatformData());
-	FTexturePlatformData* Data = MappingTexture->GetPlatformData();
-	Data->SizeX = IndexTextureResolution;
-	Data->SizeY = IndexTextureResolution;
-	Data->SetNumSlices(1);
-	Data->PixelFormat = PixelFormat;
-
-	int32 NumBlocksX = IndexTextureResolution / GPixelFormats[PixelFormat].BlockSizeX;
-	int32 NumBlocksY = IndexTextureResolution / GPixelFormats[PixelFormat].BlockSizeY;
-	FTexture2DMipMap* Mip = new FTexture2DMipMap();
-	Mip->SizeX = IndexTextureResolution;
-	Mip->SizeY = IndexTextureResolution;
-	Mip->BulkData.Lock(LOCK_READ_WRITE);
-	Mip->BulkData.Realloc((int64)NumBlocksX * NumBlocksY * GPixelFormats[PixelFormat].BlockBytes);
-	Mip->BulkData.Unlock();
-
-	MappingTexture->GetPlatformData()->Mips.Add(Mip);
-
-	
 	FByteBulkData& BulkData = MappingTexture->GetPlatformData()->Mips[0].BulkData;
 	uint8* ArrayData = static_cast<uint8*>(BulkData.Lock(LOCK_READ_WRITE));
 	const int32 Max = TileCountsPerAxis - 1;
@@ -83,7 +60,6 @@ void ACreateMappingTextureActor::CIE_CreateRandomTileIndexTexture()
 
 	TexturePackage->MarkPackageDirty();
 	FAssetRegistryModule::AssetCreated(MappingTexture);
-
 
 	FString PackageFilePath = FPackageName::LongPackageNameToFilename(SaveDir,FPackageName::GetAssetPackageExtension());
 
@@ -126,31 +102,8 @@ void ACreateMappingTextureActor::CIE_CreateWangTileIndexTexture()
 	UPackage* TexturePackage = CreatePackage(*saveLoc);
 	TexturePackage->FullyLoad();
 
-	const EPixelFormat PixelFormat = EPixelFormat::PF_B8G8R8A8;
 	const int32 TileCountsPerAxis = (int32)(TileAtlasTextureResolution / PerTileResolution);
-
-	UTexture2D* MappingTexture = NewObject<UTexture2D>(TexturePackage, UTexture2D::StaticClass(), *SaveName, RF_Public | RF_Standalone);
-	MappingTexture->MipGenSettings = TMGS_NoMipmaps;
-	MappingTexture->CompressionSettings = TC_Default;
-	MappingTexture->SRGB = false;
-	MappingTexture->SetPlatformData(new FTexturePlatformData());
-	FTexturePlatformData* Data = MappingTexture->GetPlatformData();
-	Data->SizeX = IndexTextureResolution;
-	Data->SizeY = IndexTextureResolution;
-	Data->SetNumSlices(1);
-	Data->PixelFormat = PixelFormat;
-
-	int32 NumBlocksX = IndexTextureResolution / GPixelFormats[PixelFormat].BlockSizeX;
-	int32 NumBlocksY = IndexTextureResolution / GPixelFormats[PixelFormat].BlockSizeY;
-	FTexture2DMipMap* Mip = new FTexture2DMipMap();
-	Mip->SizeX = IndexTextureResolution;
-	Mip->SizeY = IndexTextureResolution;
-	Mip->BulkData.Lock(LOCK_READ_WRITE);
-	Mip->BulkData.Realloc((int64)NumBlocksX * NumBlocksY * GPixelFormats[PixelFormat].BlockBytes);
-	Mip->BulkData.Unlock();
-
-	MappingTexture->GetPlatformData()->Mips.Add(Mip);
-
+	UTexture2D* MappingTexture = CreateTexture2D(EPixelFormat::PF_B8G8R8A8, TexturePackage);
 
 	FByteBulkData& BulkData = MappingTexture->GetPlatformData()->Mips[0].BulkData;
 	uint8* ArrayData = static_cast<uint8*>(BulkData.Lock(LOCK_READ_WRITE));
@@ -181,9 +134,7 @@ void ACreateMappingTextureActor::CIE_CreateWangTileIndexTexture()
 	TexturePackage->MarkPackageDirty();
 	FAssetRegistryModule::AssetCreated(MappingTexture);
 
-
 	FString PackageFilePath = FPackageName::LongPackageNameToFilename(SaveDir, FPackageName::GetAssetPackageExtension());
-
 	if (!UPackage::SavePackage(
 		TexturePackage,
 		MappingTexture,
@@ -196,6 +147,35 @@ void ACreateMappingTextureActor::CIE_CreateWangTileIndexTexture()
 	TArray<UObject*> ObjectsToSync;
 	ObjectsToSync.Add(MappingTexture);
 	GEditor->SyncBrowserToObjects(ObjectsToSync);
+}
+
+UTexture2D* ACreateMappingTextureActor::CreateTexture2D(EPixelFormat InPixelFormat, UPackage* TexturePackage)
+{
+	UTexture2D* MappingTexture = NewObject<UTexture2D>(TexturePackage, UTexture2D::StaticClass(), *SaveName, RF_Public | RF_Standalone);
+	MappingTexture->MipGenSettings = TMGS_NoMipmaps;
+	MappingTexture->CompressionSettings = TC_Default;
+	MappingTexture->SRGB = false;
+	MappingTexture->SetPlatformData(new FTexturePlatformData());
+	FTexturePlatformData* Data = MappingTexture->GetPlatformData();
+	Data->SizeX = IndexTextureResolution;
+	Data->SizeY = IndexTextureResolution;
+	Data->SetNumSlices(1);
+	Data->PixelFormat = InPixelFormat;
+
+	const FPixelFormatInfo& PixelFormatInfo = GPixelFormats[InPixelFormat];
+	const int32 NumBlocksX = IndexTextureResolution / PixelFormatInfo.BlockSizeX;
+	const int32 NumBlocksY = IndexTextureResolution / PixelFormatInfo.BlockSizeY;
+
+	FTexture2DMipMap* Mip = new FTexture2DMipMap();
+	Mip->SizeX = IndexTextureResolution;
+	Mip->SizeY = IndexTextureResolution;
+	Mip->BulkData.Lock(LOCK_READ_WRITE);
+	Mip->BulkData.Realloc((int64)NumBlocksX * NumBlocksY * PixelFormatInfo.BlockBytes);
+	Mip->BulkData.Unlock();
+
+	MappingTexture->GetPlatformData()->Mips.Add(Mip);
+
+	return MappingTexture;
 }
 
 uint8 ACreateMappingTextureActor::SearchWangTileIndex(uint8 SearchIdx)
@@ -218,6 +198,7 @@ uint8 ACreateMappingTextureActor::SearchWangTileIndex(uint8 SearchIdx)
 
 	return Result.TileIndice;
 }
+
 uint8 ACreateMappingTextureActor::GetWangTileIndex(uint8* InPixelArray, int32 CurrentPixelIdx)
 {
 	int32 X = CurrentPixelIdx % IndexTextureResolution;

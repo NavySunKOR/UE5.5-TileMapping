@@ -92,10 +92,14 @@ protected:
 	void CIE_CreateWangTileIndexTexture();
 #endif
 
+	UTexture2D* CreateTexture2D(EPixelFormat InPixelFormat, UPackage* TexturePackage);
 	uint8 SearchWangTileIndex(uint8 SearchIdx);
 	uint8 GetWangTileIndex(uint8* InPixelArray, int32 CurrentPixelIdx);
 
 #if WITH_EDITORONLY_DATA
+	UPROPERTY(EditAnywhere, Category = "RandomTile")
+	bool bUsing1DTile = false;
+
 	UPROPERTY(EditAnywhere , Category="RandomTile")
 	int32 TileAtlasTextureResolution;
 
