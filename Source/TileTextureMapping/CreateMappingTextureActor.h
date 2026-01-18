@@ -36,7 +36,6 @@ public:
 
 		TileIndice = NETile | SWTile;
 	}
-
 	FWangTileData(uint8 Indice)
 	{
 		TileIndice = Indice;
@@ -70,19 +69,6 @@ UCLASS()
 class ACreateMappingTextureActor : public AActor
 {
 	GENERATED_BODY()
-	
-public:	
-	// Sets default values for this actor's properties
-	ACreateMappingTextureActor();
-
-protected:
-	// Called when the game starts or when spawned
-	virtual void BeginPlay() override;
-
-public:	
-	// Called every frame
-	virtual void Tick(float DeltaTime) override;
-
 protected:
 #if WITH_EDITOR
 	UFUNCTION(CallInEditor, Category = "RandomTile")
@@ -114,13 +100,13 @@ protected:
 
 	UPROPERTY(EditAnywhere, Category = "RandomTile")
 	FString SaveName;
-#endif
 
 	UPROPERTY(EditAnywhere)
 	bool bUseManualMapping = false;
 
-	UPROPERTY(EditAnywhere, meta = (EditCondition = "bUseManualMapping",EditConditionHides))
+	UPROPERTY(EditAnywhere, meta = (EditCondition = "bUseManualMapping", EditConditionHides))
 	TArray<FWangTileData> Tiles;
+#endif
 
 
 };
