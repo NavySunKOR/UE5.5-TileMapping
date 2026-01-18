@@ -116,9 +116,8 @@ void ACreateMappingTextureActor::CIE_CreateRandomTileIndexTexture()
 	FByteBulkData& BulkData = MappingTexture->GetPlatformData()->Mips[0].BulkData;
 	uint8* ArrayData = static_cast<uint8*>(BulkData.Lock(LOCK_READ_WRITE));
 
-	int32 Max = 0;
 	const int32 TileCountsPerAxis = (int32)(TileAtlasTextureResolution / PerTileResolution);
-	Max = (bUsing1DTile) ? TileCountsPerAxis * TileCountsPerAxis - 1 : TileCountsPerAxis - 1;
+	int32 Max = (bUsing1DTile) ? TileCountsPerAxis * TileCountsPerAxis - 1 : TileCountsPerAxis - 1;
 
 	for (int32 i = 0; i < IndexTextureResolution * IndexTextureResolution * 4; i += 4)
 	{
@@ -197,30 +196,42 @@ void ACreateMappingTextureActor::CIE_CreateWangTileIndexTexture()
 	UPackage* TexturePackage = CreatePackage(*saveLoc);
 	TexturePackage->FullyLoad();
 
-	const int32 TileCountsPerAxis = (int32)(TileAtlasTextureResolution / PerTileResolution);
 	UTexture2D* MappingTexture = CreateTexture2D(EPixelFormat::PF_B8G8R8A8, TexturePackage);
 
 	FByteBulkData& BulkData = MappingTexture->GetPlatformData()->Mips[0].BulkData;
 	uint8* ArrayData = static_cast<uint8*>(BulkData.Lock(LOCK_READ_WRITE));
-	const int32 Max = TileCountsPerAxis - 1;
+
+	const int32 TileCountsPerAxis = (int32)(TileAtlasTextureResolution / PerTileResolution);
+	const int32 Max = (bUsing1DTile)? TileCountsPerAxis* TileCountsPerAxis - 1 : TileCountsPerAxis - 1;
+
 	for (int32 i = 0; i < IndexTextureResolution * IndexTextureResolution * 4; i += 4)
 	{
-		const uint8 SelectedTiles1D = GetWangTileIndex(ArrayData,i);
-		const uint8 XIdx = SelectedTiles1D % TileCountsPerAxis;
-		const uint8 YIdx = SelectedTiles1D / TileCountsPerAxis;
-		UE_LOG(LogTemp, Warning, TEXT("SelectedTiles1D :%d / XIdx : %d / YIdx : %d"), SelectedTiles1D, XIdx, YIdx)
-
-		const float RateX = (float)XIdx / TileCountsPerAxis;
-		const float RateY = (float)YIdx / TileCountsPerAxis;
-
-		UE_LOG(LogTemp,Warning,TEXT("Rate X : %f / Rate Y : %f"),RateX,RateY)
-
-		const uint8 RChannel = (uint8)(RateX * 255);
-		const uint8 GChannel = (uint8)(RateY * 255);
-		ArrayData[i] = SelectedTiles1D; //B
-		ArrayData[i + 1] = GChannel; //G
-		ArrayData[i + 2] = RChannel; //R
 		ArrayData[i + 3] = 1; //A
+
+		const uint8 SelectedTiles1D = GetWangTileIndex(ArrayData,i);
+		ArrayData[i] = SelectedTiles1D; //B
+
+		if (bUsing1DTile)
+		{
+			const uint8 Idx = SelectedTiles1D % TileCountsPerAxis;
+			const float Rate = (float)Idx / TileCountsPerAxis;
+
+			const uint8 RChannel = (uint8)(Rate * 255);
+			ArrayData[i + 2] = RChannel; //R
+		}
+		else
+		{
+			const uint8 XIdx = SelectedTiles1D % TileCountsPerAxis;
+			const uint8 YIdx = SelectedTiles1D / TileCountsPerAxis;
+
+			const float RateX = (float)XIdx / TileCountsPerAxis;
+			const float RateY = (float)YIdx / TileCountsPerAxis;
+
+			const uint8 RChannel = (uint8)(RateX * 255);
+			const uint8 GChannel = (uint8)(RateY * 255);
+			ArrayData[i + 1] = GChannel; //G
+			ArrayData[i + 2] = RChannel; //R
+		}
 	}
 	MappingTexture->Source.Init(IndexTextureResolution, IndexTextureResolution, 1, 1, ETextureSourceFormat::TSF_BGRA8, ArrayData);
 	BulkData.Unlock();
