@@ -112,7 +112,4 @@ protected:
 	TArray<FWangTileData> Tiles;
 #endif
 
-	int32 IndexTexturePixelCounts = 0;
-
-
 };
