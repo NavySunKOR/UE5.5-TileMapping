@@ -197,24 +197,30 @@ UTexture2D* ACreateMappingTextureActor::CreateTexture2D(EPixelFormat InPixelForm
 	return MappingTexture;
 }
 
-uint8 ACreateMappingTextureActor::SearchWangTileIndex(uint8 SearchIdx)
+//Search Match tile 1 is essential match, 0 is optional.
+uint8 ACreateMappingTextureActor::SearchWangTileIndex(const FWangTileData& InWangTileData)
 {
 	TArray<FWangTileData> OutputTile;
+
+	//If 0, then it's optional.
+	//If 1, then it's essential.
 	for (const FWangTileData& Tile : Tiles)
 	{
-		//Place where
-		if (SearchIdx == 0)
+		//If 1 , but it doesn't match, then continue
+		if ((InWangTileData.East == 1 && (Tile.East == 0)) ||
+			(InWangTileData.West == 1 && (Tile.West == 0)) ||
+			(InWangTileData.South == 1 && (Tile.South == 0)) ||
+			(InWangTileData.North == 1 && (Tile.North == 0)))
 		{
-			OutputTile.Add(Tile);
+			continue;
 		}
-		else if ((Tile.TileIndice & SearchIdx) != 0)
+		else
 		{
 			OutputTile.Add(Tile);
 		}
 	}
 
 	const FWangTileData& Result = OutputTile[FMath::RandRange(0, OutputTile.Num() - 1)];
-
 	return Result.TileIndice;
 }
 
@@ -232,35 +238,54 @@ uint8 ACreateMappingTextureActor::GetWangTileIndex(uint8* InPixelArray, int32 Cu
 	uint8 East = 0;
 	uint8 South = 0;
 
+	const int32 WestIdx = CurrentPixelIdx - 4;
+	const int32 NorthIdx = (CurrentPixelIdx - (Y * IndexTextureResolution));
+	const int32 EastIdx = CurrentPixelIdx + 4;
+	const int32 SouthIdx = (CurrentPixelIdx + (Y * IndexTextureResolution));
+
 	if (bIsXCornor || bIsYCornor)
 	{
-		if (bIsXCornor)
+		//Left top pixel could be any tiles
+		if ((X == 0) && (Y == 0))
 		{
-			West = (X == 0) ? 0 : 1;
-			East = (X == (IndexTextureResolution - 1)) ? 0 : 1;
+			West = FMath::RandRange(0, 1);
+			East = FMath::RandRange(0, 1);
+			North = FMath::RandRange(0, 1);
+			South = FMath::RandRange(0, 1);
 		}
-
-		if (bIsYCornor)
+		//right top pixel should consider left pixels
+		else if (X == (IndexTextureResolution - 1) && Y == 0)
 		{
-			North = (Y == 0) ? 0 : 1;
-			South = (Y == (IndexTextureResolution - 1)) ? 0 : 1;
+			West = ((InPixelArray[WestIdx] & EAST_BIT) != 0) ? 1 : 0; // Get West Side's East Pixel(To find out connection)
+			East = FMath::RandRange(0, 1);
+			North = FMath::RandRange(0, 1);
+			South = FMath::RandRange(0, 1);
+		}
+		//Left and none top pixels should consider top pixels
+		else if ((X == 0) && (Y != 0))
+		{
+			West = FMath::RandRange(0, 1);
+			East = FMath::RandRange(0, 1);
+			South = FMath::RandRange(0, 1);
+			North = ((InPixelArray[NorthIdx] & SOUTH_BIT) != 0) ? 1 : 0; // Get North Side's South Pixel(To find out connection)
+		}
+		//right and none top pixels should consider north and west pixels.
+		else if (X == (IndexTextureResolution - 1) && Y != 0)
+		{
+			East = FMath::RandRange(0, 1);
+			South = FMath::RandRange(0, 1);
+			West = ((InPixelArray[WestIdx] & EAST_BIT) != 0) ? 1 : 0; // Get West Side's East Pixel(To find out connection)
+			North = ((InPixelArray[NorthIdx] & SOUTH_BIT) != 0) ? 1 : 0; // Get North Side's South Pixel(To find out connection)
 		}
 	}
 	else //If it's not cornor, then search four neighbour pixels and matches
 	{
-		int32 WestIdx = CurrentPixelIdx - 4;
-		West = ((InPixelArray[WestIdx] & WEST_BIT) != 0) ? 1 : 0;
-
-		int32 NorthIdx = (CurrentPixelIdx - (Y * IndexTextureResolution));
-		North = ((InPixelArray[NorthIdx] & NORTH_BIT) != 0) ? 1 : 0;
-
-		int32 EastIdx = CurrentPixelIdx + 4;
-		East = ((InPixelArray[EastIdx] & EAST_BIT) != 0) ? 1 : 0;
-
-		int32 SouthIdx = (CurrentPixelIdx + (Y * IndexTextureResolution));
-		South = ((InPixelArray[SouthIdx] & SOUTH_BIT) != 0) ? 1 : 0;
+		West = ((InPixelArray[WestIdx] & EAST_BIT) != 0) ? 1 : 0; // Get West Side's East Pixel(To find out connection)
+		North = ((InPixelArray[NorthIdx] & SOUTH_BIT) != 0) ? 1 : 0; // Get North Side's South Pixel(To find out connection)
+		East = ((InPixelArray[EastIdx] & WEST_BIT) != 0) ? 1 : 0;  // Get East Side's West Pixel(To find out connection)
+		South = ((InPixelArray[SouthIdx] & NORTH_BIT) != 0) ? 1 : 0; // Get South Side's North Pixel(To find out connection)
 	}
 
 	FWangTileData SearchTile = FWangTileData(West, North, East, South);
-	return SearchWangTileIndex(SearchTile.TileIndice);
+	return SearchWangTileIndex(SearchTile);
 }

@@ -82,9 +82,8 @@ protected:
 
 	void SyncContentBrowser(UTexture2D* InObjectToSync);
 #endif
-
 	UTexture2D* CreateTexture2D(EPixelFormat InPixelFormat, UPackage* TexturePackage);
-	uint8 SearchWangTileIndex(uint8 SearchIdx);
+	uint8 SearchWangTileIndex(const FWangTileData& InWangTileData); //Search Match tile 1 is essential match, 0 is optional.
 	uint8 GetWangTileIndex(uint8* InPixelArray, int32 CurrentPixelIdx);
 
 #if WITH_EDITORONLY_DATA
