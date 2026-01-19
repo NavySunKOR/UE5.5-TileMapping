@@ -5,6 +5,169 @@
 #include "AssetRegistry/AssetRegistryModule.h"
 #include "ImageUtils.h"
 
+void ACreateMappingTextureActor::BeginPlay()
+{
+	Super::BeginPlay();
+	IndexTexturePixelCounts = IndexTextureResolution * IndexTextureResolution * COLOR_CHANNEL;
+}
+
+#if WITH_EDITOR
+void ACreateMappingTextureActor::CIE_CreateRandomTileIndexTexture()
+{
+	FString saveLoc = (SaveDir + "/" + SaveName);
+	UPackage* TexturePackage = CreatePackage(*saveLoc);
+	TexturePackage->FullyLoad();
+
+	UTexture2D* MappingTexture = CreateTexture2D(EPixelFormat::PF_B8G8R8A8, TexturePackage);
+
+	FByteBulkData& BulkData = MappingTexture->GetPlatformData()->Mips[0].BulkData;
+	uint8* ArrayData = static_cast<uint8*>(BulkData.Lock(LOCK_READ_WRITE));
+
+	const int32 TileCountsPerAxis = (int32)(TileAtlasTextureResolution / PerTileResolution);
+	int32 Max = (bUsing1DTile) ? TileCountsPerAxis * TileCountsPerAxis - 1 : TileCountsPerAxis - 1;
+
+	for (int32 i = 0; i < IndexTexturePixelCounts; i += COLOR_CHANNEL)
+	{
+		ArrayData[i] = 1; //B
+		ArrayData[i + 3] = 1; //A
+
+		if (bUsing1DTile)
+		{
+			const int32 rand = FMath::RandRange(0, Max);
+			const float Idx = (float)rand / (float)Max;
+			const uint8 RChannel = (uint8)(Idx * 255);
+
+			ArrayData[i + 1] = 1; // G
+			ArrayData[i + 2] = RChannel; //R
+		}
+		else
+		{
+			const int32 rand1 = FMath::RandRange(0, Max);
+			const int32 rand2 = FMath::RandRange(0, Max);
+
+			const float Idx1 = (float)rand1 / (float)Max;
+			const float Idx2 = (float)rand2 / (float)Max;
+
+			const uint8 RChannel = (uint8)(Idx1 * 255);
+			const uint8 GChannel = (uint8)(Idx2 * 255);
+
+			ArrayData[i + 1] = GChannel; //G
+			ArrayData[i + 2] = RChannel; //R
+		}
+	}
+	MappingTexture->Source.Init(IndexTextureResolution, IndexTextureResolution, 1, 1, ETextureSourceFormat::TSF_BGRA8, ArrayData);
+	BulkData.Unlock();
+	MappingTexture->UpdateResource();
+
+	TexturePackage->MarkPackageDirty();
+	FAssetRegistryModule::AssetCreated(MappingTexture);
+
+	FString PackageFilePath = FPackageName::LongPackageNameToFilename(SaveDir, FPackageName::GetAssetPackageExtension());
+
+	if (!UPackage::SavePackage(
+		TexturePackage,
+		MappingTexture,
+		EObjectFlags::RF_Public | EObjectFlags::RF_Standalone,
+		*PackageFilePath
+	))
+	{
+		UE_LOG(LogTemp, Error, TEXT("Failed to save Asset: [%s]\n"), *PackageFilePath);
+	}
+
+	SyncContentBrowser(MappingTexture);
+}
+#endif
+
+#if WITH_EDITOR
+//Wang tile fixes 16 tile in total.
+void ACreateMappingTextureActor::CIE_CreateWangTileIndexTexture()
+{
+	if (bUseManualMapping == false)
+	{
+		Tiles.Empty();
+		for (int32 i = 0; i <= 15; ++i)
+		{
+			Tiles.Add(FWangTileData(i));
+		}
+	}
+	else
+	{
+		for (FWangTileData& Tile : Tiles)
+		{
+			Tile.CalcTileIndice();
+		}
+	}
+
+	FString saveLoc = (SaveDir + "/" + SaveName);
+	UPackage* TexturePackage = CreatePackage(*saveLoc);
+	TexturePackage->FullyLoad();
+
+	UTexture2D* MappingTexture = CreateTexture2D(EPixelFormat::PF_B8G8R8A8, TexturePackage);
+
+	FByteBulkData& BulkData = MappingTexture->GetPlatformData()->Mips[0].BulkData;
+	uint8* ArrayData = static_cast<uint8*>(BulkData.Lock(LOCK_READ_WRITE));
+
+	const int32 TileCountsPerAxis = (int32)(TileAtlasTextureResolution / PerTileResolution);
+	const int32 Max = (bUsing1DTile) ? TileCountsPerAxis * TileCountsPerAxis - 1 : TileCountsPerAxis - 1;
+
+	for (int32 i = 0; i < IndexTexturePixelCounts; i += COLOR_CHANNEL)
+	{
+		ArrayData[i + 3] = 1; //A
+
+		const uint8 SelectedTiles1D = GetWangTileIndex(ArrayData, i);
+		ArrayData[i] = SelectedTiles1D; //B
+
+		if (bUsing1DTile)
+		{
+			const uint8 Idx = SelectedTiles1D % TileCountsPerAxis;
+			const float Rate = (float)Idx / TileCountsPerAxis;
+
+			const uint8 RChannel = (uint8)(Rate * 255);
+			ArrayData[i + 2] = RChannel; //R
+		}
+		else
+		{
+			const uint8 XIdx = SelectedTiles1D % TileCountsPerAxis;
+			const uint8 YIdx = SelectedTiles1D / TileCountsPerAxis;
+
+			const float RateX = (float)XIdx / TileCountsPerAxis;
+			const float RateY = (float)YIdx / TileCountsPerAxis;
+
+			const uint8 RChannel = (uint8)(RateX * 255);
+			const uint8 GChannel = (uint8)(RateY * 255);
+			ArrayData[i + 1] = GChannel; //G
+			ArrayData[i + 2] = RChannel; //R
+		}
+	}
+	MappingTexture->Source.Init(IndexTextureResolution, IndexTextureResolution, 1, 1, ETextureSourceFormat::TSF_BGRA8, ArrayData);
+	BulkData.Unlock();
+	MappingTexture->UpdateResource();
+
+	TexturePackage->MarkPackageDirty();
+	FAssetRegistryModule::AssetCreated(MappingTexture);
+
+	FString PackageFilePath = FPackageName::LongPackageNameToFilename(SaveDir, FPackageName::GetAssetPackageExtension());
+	if (!UPackage::SavePackage(
+		TexturePackage,
+		MappingTexture,
+		EObjectFlags::RF_Public | EObjectFlags::RF_Standalone,
+		*PackageFilePath
+	))
+	{
+		UE_LOG(LogTemp, Error, TEXT("Failed to save Asset: [%s]\n"), *PackageFilePath);
+	}
+
+	SyncContentBrowser(MappingTexture);
+}
+
+void ACreateMappingTextureActor::SyncContentBrowser(UTexture2D* InObjectToSync)
+{
+	TArray<UObject*> ObjectsToSync;
+	ObjectsToSync.Add(InObjectToSync);
+	GEditor->SyncBrowserToObjects(ObjectsToSync);
+}
+#endif
+
 UTexture2D* ACreateMappingTextureActor::CreateTexture2D(EPixelFormat InPixelFormat, UPackage* TexturePackage)
 {
 	UTexture2D* MappingTexture = NewObject<UTexture2D>(TexturePackage, UTexture2D::StaticClass(), *SaveName, RF_Public | RF_Standalone);
@@ -98,160 +261,6 @@ uint8 ACreateMappingTextureActor::GetWangTileIndex(uint8* InPixelArray, int32 Cu
 		South = ((InPixelArray[SouthIdx] & SOUTH_BIT) != 0) ? 1 : 0;
 	}
 
-
-
 	FWangTileData SearchTile = FWangTileData(West, North, East, South);
 	return SearchWangTileIndex(SearchTile.TileIndice);
 }
-
-#if WITH_EDITOR
-void ACreateMappingTextureActor::CIE_CreateRandomTileIndexTexture()
-{
-	FString saveLoc = (SaveDir + "/" + SaveName);
-	UPackage* TexturePackage = CreatePackage(*saveLoc);
-	TexturePackage->FullyLoad();
-
-	UTexture2D* MappingTexture = CreateTexture2D(EPixelFormat::PF_B8G8R8A8, TexturePackage);
-
-	FByteBulkData& BulkData = MappingTexture->GetPlatformData()->Mips[0].BulkData;
-	uint8* ArrayData = static_cast<uint8*>(BulkData.Lock(LOCK_READ_WRITE));
-
-	const int32 TileCountsPerAxis = (int32)(TileAtlasTextureResolution / PerTileResolution);
-	int32 Max = (bUsing1DTile) ? TileCountsPerAxis * TileCountsPerAxis - 1 : TileCountsPerAxis - 1;
-
-	for (int32 i = 0; i < IndexTextureResolution * IndexTextureResolution * 4; i += 4)
-	{
-		ArrayData[i] = 1; //B
-		ArrayData[i + 3] = 1; //A
-
-		if (bUsing1DTile)
-		{
-			const int32 rand = FMath::RandRange(0, Max);
-			const float Idx = (float)rand / (float)Max;
-			const uint8 RChannel = (uint8)(Idx * 255);
-
-			ArrayData[i + 1] = 1; // G
-			ArrayData[i + 2] = RChannel; //R
-		}
-		else
-		{
-			const int32 rand1 = FMath::RandRange(0, Max);
-			const int32 rand2 = FMath::RandRange(0, Max);
-
-			const float Idx1 = (float)rand1 / (float)Max;
-			const float Idx2 = (float)rand2 / (float)Max;
-
-			const uint8 RChannel = (uint8)(Idx1 * 255);
-			const uint8 GChannel = (uint8)(Idx2 * 255);
-
-			ArrayData[i + 1] = GChannel; //G
-			ArrayData[i + 2] = RChannel; //R
-		}
-	}
-	MappingTexture->Source.Init(IndexTextureResolution, IndexTextureResolution, 1, 1, ETextureSourceFormat::TSF_BGRA8, ArrayData);
-	BulkData.Unlock();
-	MappingTexture->UpdateResource();
-
-	TexturePackage->MarkPackageDirty();
-	FAssetRegistryModule::AssetCreated(MappingTexture);
-
-	FString PackageFilePath = FPackageName::LongPackageNameToFilename(SaveDir,FPackageName::GetAssetPackageExtension());
-
-	if (!UPackage::SavePackage(
-			TexturePackage,
-			MappingTexture,
-			EObjectFlags::RF_Public | EObjectFlags::RF_Standalone,
-			*PackageFilePath
-		))
-	{
-		UE_LOG(LogTemp, Error, TEXT("Failed to save Asset: [%s]\n"), *PackageFilePath);
-	}
-	TArray<UObject*> ObjectsToSync;
-	ObjectsToSync.Add(MappingTexture);
-	GEditor->SyncBrowserToObjects(ObjectsToSync);
-}
-#endif
-
-#if WITH_EDITOR
-//Wang tile fixes 16 tile in total.
-void ACreateMappingTextureActor::CIE_CreateWangTileIndexTexture()
-{
-	if (bUseManualMapping == false)
-	{
-		Tiles.Empty();
-		for (int32 i = 0; i <= 15; ++i)
-		{
-			Tiles.Add(FWangTileData(i));
-		}
-	}
-	else
-	{
-		for (FWangTileData& Tile : Tiles)
-		{
-			Tile.CalcTileIndice();
-		}
-	}
-
-	FString saveLoc = (SaveDir + "/" + SaveName);
-	UPackage* TexturePackage = CreatePackage(*saveLoc);
-	TexturePackage->FullyLoad();
-
-	UTexture2D* MappingTexture = CreateTexture2D(EPixelFormat::PF_B8G8R8A8, TexturePackage);
-
-	FByteBulkData& BulkData = MappingTexture->GetPlatformData()->Mips[0].BulkData;
-	uint8* ArrayData = static_cast<uint8*>(BulkData.Lock(LOCK_READ_WRITE));
-
-	const int32 TileCountsPerAxis = (int32)(TileAtlasTextureResolution / PerTileResolution);
-	const int32 Max = (bUsing1DTile)? TileCountsPerAxis* TileCountsPerAxis - 1 : TileCountsPerAxis - 1;
-
-	for (int32 i = 0; i < IndexTextureResolution * IndexTextureResolution * 4; i += 4)
-	{
-		ArrayData[i + 3] = 1; //A
-
-		const uint8 SelectedTiles1D = GetWangTileIndex(ArrayData,i);
-		ArrayData[i] = SelectedTiles1D; //B
-
-		if (bUsing1DTile)
-		{
-			const uint8 Idx = SelectedTiles1D % TileCountsPerAxis;
-			const float Rate = (float)Idx / TileCountsPerAxis;
-
-			const uint8 RChannel = (uint8)(Rate * 255);
-			ArrayData[i + 2] = RChannel; //R
-		}
-		else
-		{
-			const uint8 XIdx = SelectedTiles1D % TileCountsPerAxis;
-			const uint8 YIdx = SelectedTiles1D / TileCountsPerAxis;
-
-			const float RateX = (float)XIdx / TileCountsPerAxis;
-			const float RateY = (float)YIdx / TileCountsPerAxis;
-
-			const uint8 RChannel = (uint8)(RateX * 255);
-			const uint8 GChannel = (uint8)(RateY * 255);
-			ArrayData[i + 1] = GChannel; //G
-			ArrayData[i + 2] = RChannel; //R
-		}
-	}
-	MappingTexture->Source.Init(IndexTextureResolution, IndexTextureResolution, 1, 1, ETextureSourceFormat::TSF_BGRA8, ArrayData);
-	BulkData.Unlock();
-	MappingTexture->UpdateResource();
-
-	TexturePackage->MarkPackageDirty();
-	FAssetRegistryModule::AssetCreated(MappingTexture);
-
-	FString PackageFilePath = FPackageName::LongPackageNameToFilename(SaveDir, FPackageName::GetAssetPackageExtension());
-	if (!UPackage::SavePackage(
-		TexturePackage,
-		MappingTexture,
-		EObjectFlags::RF_Public | EObjectFlags::RF_Standalone,
-		*PackageFilePath
-	))
-	{
-		UE_LOG(LogTemp, Error, TEXT("Failed to save Asset: [%s]\n"), *PackageFilePath);
-	}
-	TArray<UObject*> ObjectsToSync;
-	ObjectsToSync.Add(MappingTexture);
-	GEditor->SyncBrowserToObjects(ObjectsToSync);
-}
-#endif

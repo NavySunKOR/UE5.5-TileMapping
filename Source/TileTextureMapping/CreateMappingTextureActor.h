@@ -10,6 +10,7 @@
 #define NORTH_BIT 0
 #define EAST_BIT 1
 #define SOUTH_BIT 2
+#define COLOR_CHANNEL 4
 
 USTRUCT(BlueprintType)
 struct FWangTileData
@@ -70,12 +71,16 @@ class ACreateMappingTextureActor : public AActor
 {
 	GENERATED_BODY()
 protected:
+	virtual void BeginPlay() override;
+protected:
 #if WITH_EDITOR
 	UFUNCTION(CallInEditor, Category = "RandomTile")
 	void CIE_CreateRandomTileIndexTexture();
 
 	UFUNCTION(CallInEditor, Category = "WangTile")
 	void CIE_CreateWangTileIndexTexture();
+
+	void SyncContentBrowser(UTexture2D* InObjectToSync);
 #endif
 
 	UTexture2D* CreateTexture2D(EPixelFormat InPixelFormat, UPackage* TexturePackage);
@@ -107,6 +112,8 @@ protected:
 	UPROPERTY(EditAnywhere, meta = (EditCondition = "bUseManualMapping", EditConditionHides))
 	TArray<FWangTileData> Tiles;
 #endif
+
+	int32 IndexTexturePixelCounts = 0;
 
 
 };
