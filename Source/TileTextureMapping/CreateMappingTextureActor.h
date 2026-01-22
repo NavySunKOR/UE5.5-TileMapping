@@ -40,10 +40,10 @@ public:
 	FWangTileData(uint8 Indice)
 	{
 		TileIndice = Indice;
-		West = ((Indice & WEST_BIT) > 0) ? 1 : 0;
-		South = ((Indice & SOUTH_BIT) > 0) ? 1 : 0;
-		East = ((Indice & EAST_BIT) > 0) ? 1 : 0;
-		North = ((Indice & NORTH_BIT) > 0)? 1 : 0;
+		West = ((Indice & (1 << WEST_BIT)) > 0) ? 1 : 0;
+		South = ((Indice & (1 << SOUTH_BIT)) > 0) ? 1 : 0;
+		East = ((Indice & (1 << EAST_BIT)) > 0) ? 1 : 0;
+		North = ((Indice &  (1 << NORTH_BIT)) > 0)? 1 : 0;
 	}
 
 	void CalcTileIndice()
