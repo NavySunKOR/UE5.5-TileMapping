@@ -125,7 +125,6 @@ void ACreateMappingTextureActor::CIE_CreateWangTileIndexTexture()
 			float Rate = ((float)SelectedTiles1D / 15);
 			const uint8 To255 = (uint8)(Rate * 255);
 			ArrayData[i + 2] = To255; //R
-			UE_LOG(LogTemp,Warning,TEXT("1D : %d, Rate : %f , To 255 : %d"),SelectedTiles1D,Rate,To255)
 		}
 		else
 		{
@@ -198,43 +197,42 @@ UTexture2D* ACreateMappingTextureActor::CreateTexture2D(EPixelFormat InPixelForm
 
 	return MappingTexture;
 }
-
-//Search Match tile 1 is essential match, 0 is optional.
-uint8 ACreateMappingTextureActor::SearchWangTileIndex(const FWangTileData& InWangTileData)
+//0 - whatever, 1 - On only , 2 - Off only
+uint8 ACreateMappingTextureActor::SearchWangTileIndex(const uint8 West, const uint8 North, const uint8 East, const uint8 South)
 {
 	TArray<FWangTileData> OutputTile;
-
-	//If 0, then it's optional.
-	//If 1, then it's essential.
 	for (const FWangTileData& Tile : Tiles)
 	{
-		if (InWangTileData.East == 1 && (Tile.East == 0))
+		if ((East == 1 && (Tile.East == 0)) || 
+			(East == 2 && (Tile.East == 1)))
 		{
 			continue;
 		}
 
-		if (InWangTileData.West == 1 && (Tile.West == 0))
+		if ((West == 1 && (Tile.West == 0)) ||
+			(West == 2 && (Tile.West == 1)))
 		{
 			continue;
 		}
 
-		if (InWangTileData.South == 1 && (Tile.South == 0))
+		if ((South == 1 && (Tile.South == 0)) ||
+			(South == 2 && (Tile.South == 1)))
 		{
 			continue;
 		}
 
-		if (InWangTileData.North == 1 && (Tile.North == 0))
+		if ((North == 1 && (Tile.North == 0)) ||
+			(North == 2 && (Tile.North == 1)))
 		{
 			continue;
 		}
 
-		//UE_LOG(LogTemp,Warning,TEXT("Possible candidates -> East : %d , West : %d , South : %d , North : %d"), Tile.East, Tile.West, Tile.South, Tile.North)
 		OutputTile.Add(Tile);
 	}
 
 	const FWangTileData& Result = OutputTile[FMath::RandRange(0, OutputTile.Num() - 1)];
 
-	//UE_LOG(LogTemp, Warning, TEXT("Selected -> East : %d , West : %d , South : %d , North : %d"), Result.East, Result.West, Result.South, Result.North)
+	UE_LOG(LogTemp, Warning, TEXT("Selected -> East : %d , West : %d , South : %d , North : %d"), Result.East, Result.West, Result.South, Result.North)
 	return Result.TileIndice;
 }
 
@@ -248,79 +246,64 @@ uint8 ACreateMappingTextureActor::GetWangTileIndex(uint8* InPixelArray, int32 Cu
 	const bool bIsXCornor = (X == 0 || X == (IndexTextureResolution - 1));
 	const bool bIsYCornor = (Y == 0 || Y == (IndexTextureResolution - 1));
 
+	//This state needs 3 type of state : whatever,on only, off only
 	uint8 West = 0;
 	uint8 North = 0;
 	uint8 East = 0;
 	uint8 South = 0;
 
 	const int32 WestIdx = CurrentPixelIdx - 4;
-	const int32 NorthIdx = (CurrentPixelIdx - (Y * IndexTextureResolution));
-	const int32 EastIdx = CurrentPixelIdx + 4;
-	const int32 SouthIdx = (CurrentPixelIdx + (Y * IndexTextureResolution));
-
+	const int32 NorthIdx = (Y > 0) ? (CurrentPixelIdx - (IndexTextureResolution * 4)) : 0;
+	UE_LOG(LogTemp, Warning, TEXT("CurrentPixelIdx : %d  / Calc : %d"), CurrentPixelIdx, IndexTextureResolution * 4)
+	UE_LOG(LogTemp, Warning, TEXT("WestIdx : %d / NorthIdx : %d"), WestIdx, NorthIdx)
+	UE_LOG(LogTemp, Warning, TEXT("X : %d / Y : %d"), X, Y)
 
 	//UE_LOG(LogTemp, Warning, TEXT("CurrentPixelIdx : %d"), CurrentPixelIdx)
-	//UE_LOG(LogTemp, Warning, TEXT("X : %d / Y : %d"), X, Y)
+	//
 	//UE_LOG(LogTemp, Warning, TEXT("bIsXCornor : %d / bIsYCornor : %d"), bIsXCornor, bIsYCornor)
 
 	if (bIsXCornor || bIsYCornor)
 	{
 		//Left top pixel could be any tiles
 
-		if (X == 0 && Y == 0)
-		{
-			West = FMath::RandRange(0, 1);
-			East = FMath::RandRange(0, 1);
-			North = FMath::RandRange(0, 1);
-			South = FMath::RandRange(0, 1);
-		}
 		//only top pixel should consider left pixels
-		else if (X != 0 && Y == 0)
+		if (X != 0 && Y == 0)
 		{
-			West = ((InPixelArray[WestIdx] & EAST_BIT) != 0) ? 1 : 0; // Get West Side's East Pixel(To find out connection)
-			East = FMath::RandRange(0, 1);
-			North = FMath::RandRange(0, 1);
-			South = FMath::RandRange(0, 1);
-
-			//UE_LOG(LogTemp, Warning, TEXT("Neighbour pixels -> West : %d"), West)
+			West = ((InPixelArray[WestIdx] &  (1 << EAST_BIT)) != 0) ? 1 : 2; // Get West Side's East Pixel(To find out connection)
+			UE_LOG(LogTemp, Warning, TEXT("InPixelArray[WestIdx] : %d"), InPixelArray[WestIdx])
+			UE_LOG(LogTemp, Warning, TEXT("Neighbour pixels -> West : %d"), West)
 		}
 		//only left pixel should consider left pixels
 		else if (X == 0 && Y != 0)
 		{
-			West = FMath::RandRange(0, 1);
-			East = FMath::RandRange(0, 1);
-			South = FMath::RandRange(0, 1);
-			North = ((InPixelArray[NorthIdx] & SOUTH_BIT) != 0) ? 1 : 0; // Get North Side's South Pixel(To find out connection)
-
-			//UE_LOG(LogTemp, Warning, TEXT("Neighbour pixels -> North %d "), North)
+			North = ((InPixelArray[NorthIdx] & (1<<SOUTH_BIT)) != 0) ? 1 : 2; // Get North Side's South Pixel(To find out connection)
+			UE_LOG(LogTemp, Warning, TEXT("InPixelArray[NorthIdx] : %d"), InPixelArray[NorthIdx])
+			UE_LOG(LogTemp, Warning, TEXT("Neighbour pixels -> North %d "), North)
 		}
-		//right and none top pixels should consider north and west pixels.
+		//if pixel points are in edge of east or south
 		else if (X != 0 && Y != 0)
 		{
-			East = FMath::RandRange(0, 1);
-			South = FMath::RandRange(0, 1);
-			West = ((InPixelArray[WestIdx] & EAST_BIT) != 0) ? 1 : 0; // Get West Side's East Pixel(To find out connection)
-			North = ((InPixelArray[NorthIdx] & SOUTH_BIT) != 0) ? 1 : 0; // Get North Side's South Pixel(To find out connection)
-
-			//UE_LOG(LogTemp, Warning, TEXT("Neighbour pixels -> West : %d , North %d"), West, North)
+			West = ((InPixelArray[WestIdx] & (1 << EAST_BIT)) != 0) ? 1 : 2; // Get West Side's East Pixel(To find out connection)
+			North = ((InPixelArray[NorthIdx] & (1 << SOUTH_BIT)) != 0) ? 1 : 2; // Get North Side's South Pixel(To find out connection)
+			UE_LOG(LogTemp, Warning, TEXT("InPixelArray[WestIdx] : %d"), InPixelArray[WestIdx])
+			UE_LOG(LogTemp, Warning, TEXT("InPixelArray[NorthIdx] : %d"), InPixelArray[NorthIdx])
+			UE_LOG(LogTemp, Warning, TEXT("Neighbour pixels -> West : %d , North %d"), West, North)
 		}
 	}
 	else //If it's not cornor, then search four neighbour pixels and matches
 	{
-		West = ((InPixelArray[WestIdx] & EAST_BIT) != 0) ? 1 : 0; // Get West Side's East Pixel(To find out connection)
-		North = ((InPixelArray[NorthIdx] & SOUTH_BIT) != 0) ? 1 : 0; // Get North Side's South Pixel(To find out connection)
-		East = ((InPixelArray[EastIdx] & WEST_BIT) != 0) ? 1 : 0;  // Get East Side's West Pixel(To find out connection)
-		South = ((InPixelArray[SouthIdx] & NORTH_BIT) != 0) ? 1 : 0; // Get South Side's North Pixel(To find out connection)
-
-		//UE_LOG(LogTemp, Warning, TEXT("Neighbour pixels -> West : %d , North %d , East %d , South %d"), West, North, East, South)
+		West = ((InPixelArray[WestIdx] & (1 << EAST_BIT)) != 0) ? 1 : 2; // Get West Side's East Pixel(To find out connection)
+		North = ((InPixelArray[NorthIdx] & (1 << SOUTH_BIT)) != 0) ? 1 : 2; // Get North Side's South Pixel(To find out connection)
+		UE_LOG(LogTemp, Warning, TEXT("InPixelArray[WestIdx] : %d"), InPixelArray[WestIdx])
+		UE_LOG(LogTemp, Warning, TEXT("InPixelArray[NorthIdx] : %d"), InPixelArray[NorthIdx])
+		UE_LOG(LogTemp, Warning, TEXT("Neighbour pixels -> West : %d , North %d , East %d , South %d"), West, North, East, South)
 	}
 
-	FWangTileData SearchTile = FWangTileData(West, North, East, South);
-	//UE_LOG(LogTemp, Warning, TEXT("SearchTile -> West : %d , North %d , East %d , South %d"), SearchTile.West, SearchTile.North, SearchTile.East, SearchTile.South)
-	const uint8 WangTileIndex = SearchWangTileIndex(SearchTile);
+	UE_LOG(LogTemp, Warning, TEXT("SearchTile -> West : %d , North %d , East %d , South %d"), West, North, East, South)
+	const uint8 WangTileIndex = SearchWangTileIndex(West,North,East,South);
 
-	//UE_LOG(LogTemp, Warning, TEXT("WangTileIndex %d"), WangTileIndex)
-	//UE_LOG(LogTemp, Warning, TEXT(""))
+	UE_LOG(LogTemp, Warning, TEXT("WangTileIndex %d"), WangTileIndex)
+	UE_LOG(LogTemp, Warning, TEXT(""))
 
 	return WangTileIndex;
 }
