@@ -25,7 +25,7 @@ void ACreateMappingTextureActor::CIE_CreateRandomTileIndexTexture()
 	uint8* ArrayData = static_cast<uint8*>(BulkData.Lock(LOCK_READ_WRITE));
 
 	const int32 TileCountsPerAxis = (int32)(TileAtlasTextureResolution / PerTileResolution);
-	int32 Max = (bUsing1DTile) ? TileCountsPerAxis * TileCountsPerAxis - 1 : TileCountsPerAxis - 1;
+	int32 Max = TileCountsPerAxis - 1;
 
 	for (int32 i = 0; i < IndexTexturePixelCounts; i += COLOR_CHANNEL)
 	{
@@ -111,7 +111,7 @@ void ACreateMappingTextureActor::CIE_CreateWangTileIndexTexture()
 	uint8* ArrayData = static_cast<uint8*>(BulkData.Lock(LOCK_READ_WRITE));
 
 	const int32 TileCountsPerAxis = (int32)(TileAtlasTextureResolution / PerTileResolution);
-	const int32 Max = (bUsing1DTile) ? TileCountsPerAxis * TileCountsPerAxis - 1 : TileCountsPerAxis - 1;
+	const int32 Max = TileCountsPerAxis - 1;
 
 	for (int32 i = 0; i < IndexTexturePixelCounts; i += COLOR_CHANNEL)
 	{
@@ -122,7 +122,7 @@ void ACreateMappingTextureActor::CIE_CreateWangTileIndexTexture()
 
 		if (bUsing1DTile)
 		{
-			float Rate = ((float)SelectedTiles1D / 15);
+			float Rate = ((float)SelectedTiles1D / Max);
 			const uint8 To255 = (uint8)(Rate * 255);
 			ArrayData[i + 2] = To255; //R
 		}
@@ -231,8 +231,6 @@ uint8 ACreateMappingTextureActor::SearchWangTileIndex(const uint8 West, const ui
 	}
 
 	const FWangTileData& Result = OutputTile[FMath::RandRange(0, OutputTile.Num() - 1)];
-
-	UE_LOG(LogTemp, Warning, TEXT("Selected -> East : %d , West : %d , South : %d , North : %d"), Result.East, Result.West, Result.South, Result.North)
 	return Result.TileIndice;
 }
 
@@ -254,9 +252,6 @@ uint8 ACreateMappingTextureActor::GetWangTileIndex(uint8* InPixelArray, int32 Cu
 
 	const int32 WestIdx = CurrentPixelIdx - 4;
 	const int32 NorthIdx = (Y > 0) ? (CurrentPixelIdx - (IndexTextureResolution * 4)) : 0;
-	UE_LOG(LogTemp, Warning, TEXT("CurrentPixelIdx : %d  / Calc : %d"), CurrentPixelIdx, IndexTextureResolution * 4)
-	UE_LOG(LogTemp, Warning, TEXT("WestIdx : %d / NorthIdx : %d"), WestIdx, NorthIdx)
-	UE_LOG(LogTemp, Warning, TEXT("X : %d / Y : %d"), X, Y)
 
 	//UE_LOG(LogTemp, Warning, TEXT("CurrentPixelIdx : %d"), CurrentPixelIdx)
 	//
@@ -270,40 +265,25 @@ uint8 ACreateMappingTextureActor::GetWangTileIndex(uint8* InPixelArray, int32 Cu
 		if (X != 0 && Y == 0)
 		{
 			West = ((InPixelArray[WestIdx] &  (1 << EAST_BIT)) != 0) ? 1 : 2; // Get West Side's East Pixel(To find out connection)
-			UE_LOG(LogTemp, Warning, TEXT("InPixelArray[WestIdx] : %d"), InPixelArray[WestIdx])
-			UE_LOG(LogTemp, Warning, TEXT("Neighbour pixels -> West : %d"), West)
 		}
 		//only left pixel should consider left pixels
 		else if (X == 0 && Y != 0)
 		{
 			North = ((InPixelArray[NorthIdx] & (1<<SOUTH_BIT)) != 0) ? 1 : 2; // Get North Side's South Pixel(To find out connection)
-			UE_LOG(LogTemp, Warning, TEXT("InPixelArray[NorthIdx] : %d"), InPixelArray[NorthIdx])
-			UE_LOG(LogTemp, Warning, TEXT("Neighbour pixels -> North %d "), North)
 		}
 		//if pixel points are in edge of east or south
 		else if (X != 0 && Y != 0)
 		{
 			West = ((InPixelArray[WestIdx] & (1 << EAST_BIT)) != 0) ? 1 : 2; // Get West Side's East Pixel(To find out connection)
 			North = ((InPixelArray[NorthIdx] & (1 << SOUTH_BIT)) != 0) ? 1 : 2; // Get North Side's South Pixel(To find out connection)
-			UE_LOG(LogTemp, Warning, TEXT("InPixelArray[WestIdx] : %d"), InPixelArray[WestIdx])
-			UE_LOG(LogTemp, Warning, TEXT("InPixelArray[NorthIdx] : %d"), InPixelArray[NorthIdx])
-			UE_LOG(LogTemp, Warning, TEXT("Neighbour pixels -> West : %d , North %d"), West, North)
 		}
 	}
 	else //If it's not cornor, then search four neighbour pixels and matches
 	{
 		West = ((InPixelArray[WestIdx] & (1 << EAST_BIT)) != 0) ? 1 : 2; // Get West Side's East Pixel(To find out connection)
 		North = ((InPixelArray[NorthIdx] & (1 << SOUTH_BIT)) != 0) ? 1 : 2; // Get North Side's South Pixel(To find out connection)
-		UE_LOG(LogTemp, Warning, TEXT("InPixelArray[WestIdx] : %d"), InPixelArray[WestIdx])
-		UE_LOG(LogTemp, Warning, TEXT("InPixelArray[NorthIdx] : %d"), InPixelArray[NorthIdx])
-		UE_LOG(LogTemp, Warning, TEXT("Neighbour pixels -> West : %d , North %d , East %d , South %d"), West, North, East, South)
 	}
 
-	UE_LOG(LogTemp, Warning, TEXT("SearchTile -> West : %d , North %d , East %d , South %d"), West, North, East, South)
 	const uint8 WangTileIndex = SearchWangTileIndex(West,North,East,South);
-
-	UE_LOG(LogTemp, Warning, TEXT("WangTileIndex %d"), WangTileIndex)
-	UE_LOG(LogTemp, Warning, TEXT(""))
-
 	return WangTileIndex;
 }
