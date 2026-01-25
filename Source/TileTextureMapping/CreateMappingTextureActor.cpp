@@ -83,10 +83,13 @@ void ACreateMappingTextureActor::CIE_CreateRandomTileIndexTexture()
 //Wang tile fixes 16 tile in total.
 void ACreateMappingTextureActor::CIE_CreateWangTileIndexTexture()
 {
+	const int32 TileCountsPerAxis = (int32)(TileAtlasTextureResolution / PerTileResolution);
+	const int32 Max = TileCountsPerAxis - 1;
+
 	if (bUseManualMapping == false)
 	{
 		Tiles.Empty();
-		for (int32 i = 0; i <= 15; ++i)
+		for (int32 i = 0; i < TileCountsPerAxis; ++i)
 		{
 			Tiles.Add(FWangTileData(i));
 		}
@@ -109,9 +112,6 @@ void ACreateMappingTextureActor::CIE_CreateWangTileIndexTexture()
 
 	FByteBulkData& BulkData = MappingTexture->GetPlatformData()->Mips[0].BulkData;
 	uint8* ArrayData = static_cast<uint8*>(BulkData.Lock(LOCK_READ_WRITE));
-
-	const int32 TileCountsPerAxis = (int32)(TileAtlasTextureResolution / PerTileResolution);
-	const int32 Max = TileCountsPerAxis - 1;
 
 	for (int32 i = 0; i < IndexTexturePixelCounts; i += COLOR_CHANNEL)
 	{
@@ -241,8 +241,8 @@ uint8 ACreateMappingTextureActor::GetWangTileIndex(uint8* InPixelArray, int32 Cu
 	int32 Y = ActualPixelIdx / IndexTextureResolution;
 
 	//Corner check
-	const bool bIsXCornor = (X == 0 || X == (IndexTextureResolution - 1));
-	const bool bIsYCornor = (Y == 0 || Y == (IndexTextureResolution - 1));
+	const bool bIsXCornor = X == 0;
+	const bool bIsYCornor = Y == 0;
 
 	//This state needs 3 type of state : whatever,on only, off only
 	uint8 West = 0;
@@ -270,12 +270,6 @@ uint8 ACreateMappingTextureActor::GetWangTileIndex(uint8* InPixelArray, int32 Cu
 		else if (X == 0 && Y != 0)
 		{
 			North = ((InPixelArray[NorthIdx] & (1<<SOUTH_BIT)) != 0) ? 1 : 2; // Get North Side's South Pixel(To find out connection)
-		}
-		//if pixel points are in edge of east or south
-		else if (X != 0 && Y != 0)
-		{
-			West = ((InPixelArray[WestIdx] & (1 << EAST_BIT)) != 0) ? 1 : 2; // Get West Side's East Pixel(To find out connection)
-			North = ((InPixelArray[NorthIdx] & (1 << SOUTH_BIT)) != 0) ? 1 : 2; // Get North Side's South Pixel(To find out connection)
 		}
 	}
 	else //If it's not cornor, then search four neighbour pixels and matches
